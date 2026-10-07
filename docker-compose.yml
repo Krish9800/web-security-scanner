@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  webscan-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: webscan-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - WEBSCAN_ENFORCE_SCOPE=true
+      - WEBSCAN_MAX_CONCURRENCY=10
+      - WEBSCAN_MAX_REQUESTS_PER_SECOND=20.0
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
