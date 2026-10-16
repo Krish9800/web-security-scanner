@@ -1,175 +1,161 @@
 # Web Security Scanner (`webscan`)
 
-[![CI](https://github.com/cyber-portfolio/web-security-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/cyber-portfolio/web-security-scanner/actions/workflows/ci.yml)
-[![Python 3.11 | 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Security: Bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
-[![Coverage: 95%+](https://img.shields.io/badge/coverage-95%25%2B-brightgreen.svg)](https://pytest.org/)
+Enterprise-Grade Asynchronous Web Security Assessment & Vulnerability Scanner for Modern Web Applications.
 
-An enterprise-grade, asynchronous web application vulnerability scanner and security posture evaluation engine. Features strict scope boundaries, non-destructive active probes, CVSS-based scoring, multi-format reporting (JSON, Markdown, SARIF v2.1.0), and a built-in security lab.
+[![CI Pipeline](https://github.com/Krish9800/web-security-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/Krish9800/web-security-scanner/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python: 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![Engine: HTTPX Async](https://img.shields.io/badge/Engine-HTTPX%20Async-blueviolet.svg)](https://www.python-httpx.org/)
+[![CLI: Typer](https://img.shields.io/badge/CLI-Typer-green.svg)](https://typer.tiangolo.com/)
 
 ---
 
-## Architecture Overview
+## Overview & Problem Statement
+
+Web applications are the primary target for external cyber attacks. Misconfigured security headers, insecure session cookies, permissive CORS policies, and sensitive file disclosures (such as exposed `.git` directories or `.env` files) frequently provide attackers with initial access.
+
+**Web Security Scanner** is a fast, asynchronous security auditing tool built in Python 3.12. It crawls target domains, audits HTTP response headers against OWASP and NIST recommendations, analyzes cookie security flags, inspects CORS configurations, tests for sensitive path disclosures, and generates actionable vulnerability reports.
+
+---
+
+## Architecture & Data Flow
 
 ```mermaid
 flowchart TD
-    User([Security Auditor / CI Pipeline]) --> CLI[Typer CLI / REST API]
-    CLI --> Engine[Scan Orchestrator]
-    Engine --> Scope[ScopeGuardian & Sanitizer]
-    Engine --> Requester[AsyncRequester Engine]
-    Requester --> Throttler[Token-Bucket Throttler & Semaphore]
-    
-    subgraph "Scanning Modules"
-        Hdr[Headers Scanner]
-        Cookie[Cookie Hygiene Scanner]
-        Methods[HTTP Methods Scanner]
-        Files[Sensitive Files Discovery]
-        XSS[Canary XSS Scanner]
-        SQLi[SQLi Syntax Error Scanner]
-        CORS[CORS Misconfiguration Scanner]
-        Redir[Open Redirect Scanner]
-    end
-    
-    Engine --> Hdr
-    Engine --> Cookie
-    Engine --> Methods
-    Engine --> Files
-    Engine --> XSS
-    Engine --> SQLi
-    Engine --> CORS
-    Engine --> Redir
+    Target[Target URL / Scope Definition] --> Engine[Async Crawler Engine: HTTPX]
 
-    Engine --> Scorer[Security Scoring & Posture Engine]
-    Scorer --> Reports[Report Generators]
-    Reports --> JSONOut[JSON]
-    Reports --> MDOut[Markdown]
-    Reports --> SARIFOut[OASIS SARIF v2.1.0]
+    subgraph Discovery & Crawling
+        Engine --> Spider[HTML Link Extraction & Scope Bounding]
+        Engine --> PathProbe[Sensitive Path Probe: .git, .env, backups]
+    end
+
+    subgraph Vulnerability Auditing Engine
+        Spider --> HeaderScanner[Security Headers Auditor]
+        Spider --> CookieScanner[Cookie Security Flag Auditor]
+        Spider --> CorsScanner[CORS Misconfiguration Auditor]
+        Spider --> TLSScanner[TLS / SSL Policy Checker]
+    end
+
+    subgraph Aggregation & Reporting
+        HeaderScanner --> Aggregator[Vulnerability Aggregator & CVSS Scorer]
+        CookieScanner --> Aggregator
+        CorsScanner --> Aggregator
+        PathProbe --> Aggregator
+        TLSScanner --> Aggregator
+
+        Aggregator --> RichOutput[Rich Terminal Table]
+        Aggregator --> JSONOutput[JSON / HTML Vulnerability Report]
+    end
 ```
 
 ---
 
-## Key Capabilities
+## Verified Features
 
-1. **Safety & Scope Boundary Isolation (`ScopeGuardian`)**:
-   - Enforces domain boundaries and wildcard subdomains (`*.domain.tld`).
-   - Re-checks every redirect hop target to prevent Open Redirect-to-SSRF attacks (e.g., blocking redirects to cloud metadata `169.254.169.254`).
-2. **Defensive, Non-Destructive Vulnerability Scanners**:
-   - **Security Headers**: HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and banner disclosures.
-   - **Cookie Attributes**: Evaluates `Secure`, `HttpOnly`, and `SameSite` flags.
-   - **HTTP Verbs**: Flags dangerous methods (TRACE, PUT, DELETE, OPTIONS).
-   - **Sensitive Files**: Probes `.env`, `.git/HEAD`, `robots.txt`, `security.txt`, and database backups using regex content signatures to eliminate soft-404 false positives.
-   - **Canary XSS**: Injects inert, safe canary tokens (`<webscan-xss-canary>`) into parameters to check unescaped reflection.
-   - **SQL Error Disclosure**: Injects syntax probes (`'`, `"`, `\`) and matches against 13 database error signatures.
-   - **CORS Misconfiguration**: Detects arbitrary origin reflections and wildcard origins with credentials enabled.
-   - **Open Redirects**: Checks unvalidated destination parameters.
-3. **Quantitative Scoring & Posture Grading**:
-   - Calculates a CVSS-weighted score ($0-100$) and assigns a qualitative letter grade (**A**, **B**, **C**, **D**, **F**).
-4. **DevSecOps Multi-Format Reporting**:
-   - **JSON**: Clean machine-readable serialization.
-   - **Markdown**: Formatted executive summaries and remediation guidance.
-   - **OASIS SARIF v2.1.0**: Native integration with GitHub Code Scanning alerts.
-5. **Built-in Offline Security Lab**:
-   - Embedded FastAPI testing target simulating all 8 vulnerability classes for offline testing and verification.
+- **Asynchronous Crawling:** High-throughput URL discovery and crawling powered by `httpx` and `asyncio` with strict rate limiting and scope boundary controls.
+- **Security Headers Auditing:** Evaluates presence and configuration of `Content-Security-Policy` (CSP), `Strict-Transport-Security` (HSTS), `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy`.
+- **Cookie Security Analysis:** Verifies `Secure`, `HttpOnly`, and `SameSite` (Strict/Lax) attributes across all set cookies.
+- **CORS Misconfiguration Checks:** Tests for reflected origins, `null` origin trust, and overly permissive credential sharing (`Access-Control-Allow-Credentials: true` with wildcard origins).
+- **Sensitive Path Disclosure Probing:** Checks for exposed administrative panels, configuration files (`.env`, `wp-config.php`), version control repositories (`.git/HEAD`), and backup archives.
+- **Dual Interface:** Typer CLI with Rich terminal reporting, plus a FastAPI REST backend.
 
 ---
 
-## Quickstart & Installation
+## Technology Stack
 
-### 1. Setup Virtual Environment
+- **Runtime:** Python 3.12+
+- **HTTP Client:** HTTPX (Async)
+- **HTML Parsing:** BeautifulSoup4
+- **CLI Framework:** Typer & Rich
+- **API Framework:** FastAPI & Uvicorn
+- **Testing:** Pytest, Ruff, Mypy, Bandit
+
+---
+
+## Requirements & Installation
 
 ```bash
-git clone https://github.com/cyber-portfolio/web-security-scanner.git
+# Clone the repository
+git clone https://github.com/Krish9800/web-security-scanner.git
 cd web-security-scanner
+
+# Create and activate virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
-```
 
-### 2. Run the Built-In Vulnerability Lab
-
-Launch the local test sandbox in a terminal:
-
-```bash
-webscan lab --port 8888
-```
-
-### 3. Run a Security Scan
-
-Run an automated assessment against the target:
-
-```bash
-# Terminal summary output
-webscan scan http://localhost:8888/
-
-# Exporting SARIF report for GitHub Code Scanning
-webscan scan http://localhost:8888/ --format sarif --output report.sarif
-
-# Exporting Markdown assessment report
-webscan scan http://localhost:8888/ --format markdown --output report.md
-
-# Quick single-target HTTP header probe
-webscan probe http://localhost:8888/
-```
-
-### 4. CI/CD Gate Enforcement
-
-Use the `--fail-on-high` flag to fail CI/CD build pipelines if High or Critical vulnerabilities are detected:
-
-```bash
-webscan scan https://staging.example.com/ --fail-on-high
+# Install dependencies
+pip install -e .
 ```
 
 ---
 
-## REST API Microservice
+## Verified Usage Examples
 
-Run the scanner as an asynchronous REST microservice:
+### 1. Command-Line Interface (CLI)
 
 ```bash
-uvicorn webscan.api.app:api_app --host 0.0.0.0 --port 8000
+# Perform a comprehensive scan against a target URL
+webscan scan https://example.com
+
+# Quick header-only audit (non-crawling probe)
+webscan scan https://example.com --headers-only
+
+# Deep crawl scan with maximum depth of 3 and JSON report export
+webscan scan https://example.com --max-depth 3 --format json --output report.json
+
+# Probe a single endpoint for sensitive paths
+webscan probe https://example.com
+
+# Start an embedded local practice lab target
+webscan lab --port 8080
 ```
 
-- **Interactive Swagger Docs**: `http://localhost:8000/docs`
-- **Health Check**: `GET /health`
-- **Execute Scan**: `POST /api/v1/scan`
-- **Quick Probe**: `POST /api/v1/probe`
-- **Lookup Report**: `GET /api/v1/scans/{scan_id}`
+### 2. REST API Service
+
+```bash
+# Launch the scanner REST API
+uvicorn webscan.api.app:app --host 127.0.0.1 --port 8000
+```
+
+Endpoints available at `http://127.0.0.1:8000/docs`:
+- `GET /health` — Service health check
+- `POST /api/v1/scan` — Submit asynchronous target scan
+- `GET /api/v1/scan/{scan_id}` — Poll scan progress and results
 
 ---
 
-## Docker Deployment
-
-Run the rootless container (UID `10001:10001`):
+## Testing & Quality Gates
 
 ```bash
-docker compose up --build -d
-curl http://localhost:8000/health
+# Run complete test suite with coverage
+pytest --cov=webscan --cov-report=term-missing
+
+# Linting and static analysis
+ruff check .
+ruff format --check .
+mypy src/webscan
 ```
 
 ---
 
-## Quality & DevSecOps Verification
+## Security Model & Safe Scope
 
-Run all static analysis, security audits, and test suites:
-
-```bash
-# Code style and formatting
-ruff check . && ruff format --check .
-
-# Strict type checking
-mypy src tests
-
-# SAST security audit
-bandit -c pyproject.toml -r src
-
-# Unit and integration test suite with coverage gate
-pytest -v --cov=webscan --cov-report=term-missing --cov-fail-under=90
-```
+- **Non-Destructive Scanning:** Checks are strictly read-only and passive. Does not inject destructive SQL payloads, perform denial-of-service flooding, or exploit found flaws.
+- **Scope Bounding:** The crawler strictly obeys domain boundaries and never traverses external third-party links found on the target.
+- **Rate Limiting:** Employs configurable request throttling (default 10 req/sec) to prevent adverse target impact.
 
 ---
 
-## License
+## Limitations & Known Issues
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+- **Client-Side SPA Rendering:** The built-in crawler parses static HTML responses; complex JavaScript-rendered Single Page Applications (React/Vue requiring headless Chromium) are crawled via direct endpoint discovery rather than DOM execution.
+- **Authentication:** Currently supports Bearer and Basic authentication headers; multi-step OAuth2 login flows require pre-authenticated session cookies.
+
+---
+
+## License & Responsible Use
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+> [!CAUTION]
+> **Authorization Required:** Scan only web targets and applications that you own or have explicit written permission to test.
